@@ -16,6 +16,8 @@ import { ingestFolder, extractTextFromPDF } from './ingest';
 import { chunkText } from './chunker';
 import { ask, askStream } from './llm';
 import { watchPDFFolder } from './watcher';
+process.loadEnvFile()
+
 
 /**
  * Absolute path to the shared PDF folder. Resolved once so every route
