@@ -1,0 +1,78 @@
+# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files
+
+# =========================
+# Compiled Output
+# =========================
+dist/
+tmp/
+out-tsc/
+bazel-out/
+
+# =========================
+# Node / Package Managers
+# =========================
+node_modules/
+npm-debug.log*
+yarn-error.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# =========================
+# IDEs and Editors
+# =========================
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# =========================
+# Visual Studio Code
+# =========================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+.history/
+
+# =========================
+# Angular / Cache / Coverage
+# =========================
+.angular/
+.angular/cache/
+.sass-cache/
+coverage/
+
+# =========================
+# Logs / Temporary Files
+# =========================
+connect.lock
+libpeerconnection.log
+testem.log
+typings/
+
+# =========================
+# System Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Environment Files
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Package Files
+# =========================
+# package.json
+# package-lock.json
+
+# Usually package.json SHOULD be tracked.
+# Uncomment above only if intentionally ignoring them.
