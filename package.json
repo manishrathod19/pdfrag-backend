@@ -2,11 +2,11 @@
   "name": "pdf-rag-backend",
   "version": "1.0.0",
   "description": "Local-only RAG backend for the PDF Assistant. Express + TypeScript, with @xenova/transformers, Qdrant and Ollama.",
-  "main": "dist/server.js",
+  "main": "server.ts",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "ts-node src/server.ts",
+    "start": "npx ts-node src/server.ts",
+    "dev": "npx ts-node src/server.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": ["rag", "pdf", "qdrant", "ollama", "transformers", "express"],

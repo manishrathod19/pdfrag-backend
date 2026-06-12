@@ -9,6 +9,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { embedText } from './embedder';
 import { TextChunk } from './chunker';
 import * as crypto from 'crypto';
+process.loadEnvFile()
 
 /**
  * Collection name in Qdrant for all PDF embeddings.
@@ -26,11 +27,12 @@ const VECTOR_SIZE = 384;
  * Qdrant default REST URL. Configurable via env so this works in Docker too.
  */
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
+const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
 
 /**
  * Single shared Qdrant client. The REST client is stateless — one instance is fine.
  */
-const client = new QdrantClient({ url: QDRANT_URL });
+const client = new QdrantClient({ url: QDRANT_URL, apiKey: QDRANT_API_KEY });
 
 /**
  * @method initCollection
@@ -42,6 +44,7 @@ const client = new QdrantClient({ url: QDRANT_URL });
 export async function initCollection(): Promise<void> {
   // List existing collections so re-running the server does not throw "already exists".
   const collections = await client.getCollections();
+  console.log(`[qdrant] Existing collections: ${collections.collections.map((c) => c.name).join(', ')}`);
   const exists = collections.collections.some((c) => c.name === COLLECTION_NAME);
 
   if (!exists) {
