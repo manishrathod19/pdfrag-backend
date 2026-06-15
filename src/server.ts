@@ -146,7 +146,7 @@ app.use(express.json());
  * });
  * const { answer } = await res.json();
  */
-app.post('/api/ask', apiLimiter, requireApiKey, async (req: Request, res: Response) => {
+app.post('/api/ask', async (req: Request, res: Response) => {
   // zod safeParse so we return a clean 400 instead of a thrown stack trace.
   const parsed = askSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -203,7 +203,7 @@ app.post('/api/ask', apiLimiter, requireApiKey, async (req: Request, res: Respon
  *   process.stdout.write(chunk); // raw SSE text
  * }
  */
-app.get('/api/ask/stream', apiLimiter, requireApiKey, async (req: Request, res: Response) => {
+app.get('/api/ask/stream', async (req: Request, res: Response) => {
   const question = (req.query.question as string | undefined) ?? '';
   if (!question.trim()) {
     return res.status(400).json({ error: 'question query param required' });
@@ -268,7 +268,7 @@ app.get('/api/ask/stream', apiLimiter, requireApiKey, async (req: Request, res: 
  * });
  * const { message, chunks } = await res.json();
  */
-app.post('/api/upload', apiLimiter, requireApiKey, upload.single('file'), async (req: Request, res: Response) => {
+app.post('/api/upload', upload.single('file'), async (req: Request, res: Response) => {
   // multer attaches the file to req.file when storage succeeds.
   const file = req.file;
   if (!file) {
@@ -319,7 +319,7 @@ app.post('/api/upload', apiLimiter, requireApiKey, upload.single('file'), async 
  * });
  * const { message } = await res.json();
  */
-app.post('/api/ingest', apiLimiter, requireApiKey, async (_req: Request, res: Response) => {
+app.post('/api/ingest', async (_req: Request, res: Response) => {
   try {
     const chunks = await ingestFolder(PDF_FOLDER);
     await storeChunks(chunks);
