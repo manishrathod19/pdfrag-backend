@@ -5,8 +5,15 @@
  * and sends it to the locally running Ollama LLM (llama3).
  */
 
-import ollama from 'ollama';
+import { Ollama } from 'ollama';
 import { searchChunks } from './vectorStore';
+
+/**
+ * Ollama base URL. Defaults to localhost for local dev; override with
+ * OLLAMA_BASE_URL to point at a remote instance (e.g. a Railway service).
+ */
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+const ollama = new Ollama({ host: OLLAMA_BASE_URL });
 
 /**
  * Model name. llama3 is open-weights (Meta license) and runs locally via Ollama.
