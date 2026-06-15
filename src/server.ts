@@ -125,9 +125,30 @@ app.use(
 app.use(express.json());
 
 /**
- * @route POST /api/ask
+ * @route   POST /api/ask
+ * @access  Protected — requires API key (x-api-key header)
  * @description Accepts a question, runs the full RAG pipeline, returns the answer.
  * Validates the request body with zod before processing.
+ *
+ * @authentication
+ * Pass the API key in the `x-api-key` request header.
+ *
+ * @example <caption>curl</caption>
+ * curl -X POST http://localhost:3001/api/ask \
+ *   -H "Content-Type: application/json" \
+ *   -H "x-api-key: YOUR_API_KEY" \
+ *   -d '{"question": "What is the refund policy?"}'
+ *
+ * @example <caption>JavaScript (fetch)</caption>
+ * const res = await fetch('http://localhost:3001/api/ask', {
+ *   method: 'POST',
+ *   headers: {
+ *     'Content-Type': 'application/json',
+ *     'x-api-key': process.env.API_KEY,
+ *   },
+ *   body: JSON.stringify({ question: 'What is the refund policy?' }),
+ * });
+ * const { answer } = await res.json();
  */
 app.post('/api/ask', apiLimiter, requireApiKey, async (req: Request, res: Response) => {
   // zod safeParse so we return a clean 400 instead of a thrown stack trace.
@@ -146,15 +167,45 @@ app.post('/api/ask', apiLimiter, requireApiKey, async (req: Request, res: Respon
 });
 
 /**
- * @route GET /api/ask/stream
+ * @route   GET /api/ask/stream
+ * @access  Protected — requires API key (apiKey query parameter)
  * @description SSE endpoint. Streams LLM tokens one by one as
  * Server-Sent Events. Frontend EventSource connects here for
  * real-time token-by-token chat response rendering.
  * SSE format: data: {"token": "word"}\n\n
  * End signal:  data: {"done": true}\n\n
  *
- * Note: EventSource in browsers can only send GET, so the question is
- * passed as a query-string parameter.
+ * Note: EventSource in browsers can only send GET requests and cannot set
+ * custom headers, so the API key must be passed as the `apiKey` query
+ * parameter instead of the `x-api-key` header.
+ *
+ * @authentication
+ * Pass the API key as the `apiKey` query parameter (required for EventSource/SSE
+ * because browsers cannot set custom headers on EventSource connections).
+ *
+ * @example <caption>curl</caption>
+ * curl -N "http://localhost:3001/api/ask/stream?question=What+is+the+refund+policy%3F&apiKey=YOUR_API_KEY"
+ *
+ * @example <caption>JavaScript (EventSource — browser)</caption>
+ * const params = new URLSearchParams({
+ *   question: 'What is the refund policy?',
+ *   apiKey: API_KEY,          // header auth is not possible with EventSource
+ * });
+ * const source = new EventSource(`http://localhost:3001/api/ask/stream?${params}`);
+ * source.onmessage = (event) => {
+ *   const data = JSON.parse(event.data);
+ *   if (data.done) { source.close(); return; }
+ *   console.log(data.token);  // stream tokens as they arrive
+ * };
+ *
+ * @example <caption>JavaScript (fetch with streaming — Node.js / non-browser)</caption>
+ * const params = new URLSearchParams({ question: 'What is the refund policy?' });
+ * const res = await fetch(`http://localhost:3001/api/ask/stream?${params}`, {
+ *   headers: { 'x-api-key': process.env.API_KEY },
+ * });
+ * for await (const chunk of res.body) {
+ *   process.stdout.write(chunk); // raw SSE text
+ * }
  */
 app.get('/api/ask/stream', apiLimiter, requireApiKey, async (req: Request, res: Response) => {
   const question = (req.query.question as string | undefined) ?? '';
@@ -197,10 +248,29 @@ app.get('/api/ask/stream', apiLimiter, requireApiKey, async (req: Request, res: 
 });
 
 /**
- * @route POST /api/upload
+ * @route   POST /api/upload
+ * @access  Protected — requires API key (x-api-key header)
  * @description Accepts a PDF file via multipart upload, saves it to
  * ../pdfs folder, then immediately ingests it into Qdrant so it
  * is searchable without waiting for the file watcher or manual re-ingestion.
+ *
+ * @authentication
+ * Pass the API key in the `x-api-key` request header.
+ *
+ * @example <caption>curl</caption>
+ * curl -X POST http://localhost:3001/api/upload \
+ *   -H "x-api-key: YOUR_API_KEY" \
+ *   -F "file=@/path/to/document.pdf"
+ *
+ * @example <caption>JavaScript (fetch)</caption>
+ * const form = new FormData();
+ * form.append('file', pdfBlob, 'document.pdf');
+ * const res = await fetch('http://localhost:3001/api/upload', {
+ *   method: 'POST',
+ *   headers: { 'x-api-key': process.env.API_KEY },
+ *   body: form,
+ * });
+ * const { message, chunks } = await res.json();
  */
 app.post('/api/upload', apiLimiter, requireApiKey, upload.single('file'), async (req: Request, res: Response) => {
   // multer attaches the file to req.file when storage succeeds.
@@ -234,9 +304,24 @@ app.post('/api/upload', apiLimiter, requireApiKey, upload.single('file'), async 
 });
 
 /**
- * @route POST /api/ingest
+ * @route   POST /api/ingest
+ * @access  Protected — requires API key (x-api-key header)
  * @description Re-ingests all PDFs in ../pdfs folder into Qdrant.
  * Useful when PDFs were added manually or earlier ingestion was incomplete.
+ *
+ * @authentication
+ * Pass the API key in the `x-api-key` request header.
+ *
+ * @example <caption>curl</caption>
+ * curl -X POST http://localhost:3001/api/ingest \
+ *   -H "x-api-key: YOUR_API_KEY"
+ *
+ * @example <caption>JavaScript (fetch)</caption>
+ * const res = await fetch('http://localhost:3001/api/ingest', {
+ *   method: 'POST',
+ *   headers: { 'x-api-key': process.env.API_KEY },
+ * });
+ * const { message } = await res.json();
  */
 app.post('/api/ingest', apiLimiter, requireApiKey, async (_req: Request, res: Response) => {
   try {
@@ -250,7 +335,8 @@ app.post('/api/ingest', apiLimiter, requireApiKey, async (_req: Request, res: Re
 });
 
 /**
- * @route GET /api/documents
+ * @route   GET /api/documents
+ * @access  Public — no API key required
  * @description Returns the list of all PDF filenames in ../pdfs folder.
  * Used by the Angular sidebar to display uploaded documents.
  */
@@ -267,7 +353,8 @@ app.get('/api/documents', (_req: Request, res: Response) => {
 });
 
 /**
- * @route GET /api/health
+ * @route   GET /api/health
+ * @access  Public — no API key required
  * @description Health check endpoint. Returns server status and
  * the current timestamp. Used by the frontend to verify the backend is reachable.
  */
