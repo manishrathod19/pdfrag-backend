@@ -61,6 +61,7 @@ const API_KEY = process.env.API_KEY;
  * When API_KEY is unset the guard is a no-op so local dev is unaffected.
  */
 const requireApiKey = (req: Request, res: Response, next: () => void) => {
+  console.log('API_KEY:', API_KEY);
   if (!API_KEY) return next();
   const provided = req.header('x-api-key') ?? (req.query.apiKey as string | undefined);
   if (provided !== API_KEY) {
@@ -133,11 +134,6 @@ app.use(express.json());
  * @authentication
  * Pass the API key in the `x-api-key` request header.
  *
- * @example <caption>curl</caption>
- * curl -X POST http://localhost:3001/api/ask \
- *   -H "Content-Type: application/json" \
- *   -H "x-api-key: YOUR_API_KEY" \
- *   -d '{"question": "What is the refund policy?"}'
  *
  * @example <caption>JavaScript (fetch)</caption>
  * const res = await fetch('http://localhost:3001/api/ask', {
