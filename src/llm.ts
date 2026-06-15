@@ -12,7 +12,7 @@ import { searchChunks } from './vectorStore';
  * Model name. llama3 is open-weights (Meta license) and runs locally via Ollama.
  * Override with $env:OLLAMA_MODEL if the user pulled a different tag.
  */
-const MODEL_NAME = process.env.OLLAMA_MODEL || 'llama3';
+const MODEL_NAME = process.env.OLLAMA_MODEL || 'mistral:7b-instruct-q4_0';
 
 /**
  * Ollama host. Defaults to the remote ngrok tunnel so the deployed backend can
