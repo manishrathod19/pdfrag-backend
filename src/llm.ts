@@ -5,7 +5,7 @@
  * and sends it to the locally running Ollama LLM (llama3).
  */
 
-import ollama from 'ollama';
+import { Ollama } from 'ollama';
 import { searchChunks } from './vectorStore';
 
 /**
@@ -13,6 +13,20 @@ import { searchChunks } from './vectorStore';
  * Override with $env:OLLAMA_MODEL if the user pulled a different tag.
  */
 const MODEL_NAME = process.env.OLLAMA_MODEL || 'llama3';
+
+/**
+ * Ollama host. Defaults to the remote ngrok tunnel so the deployed backend can
+ * reach an Ollama instance running outside the container. Override with
+ * $env:OLLAMA_HOST (e.g. "http://localhost:11434" for local dev).
+ */
+const OLLAMA_HOST = process.env.OLLAMA_HOST || 'https://001a-45-250-226-215.ngrok-free.app';
+
+/**
+ * Single Ollama client pointed at OLLAMA_HOST. The default `ollama` singleton
+ * always targets http://localhost:11434, so we instantiate our own to control
+ * the host.
+ */
+const ollama = new Ollama({ host: OLLAMA_HOST });
 
 /**
  * @method buildPrompt
