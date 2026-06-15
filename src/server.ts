@@ -18,16 +18,6 @@ import { ask, askStream } from './llm';
 import rateLimit from 'express-rate-limit';
 import { watchPDFFolder } from './watcher';
 
-// Load .env when present (local dev). In containerized/cloud deploys the env
-// vars are injected ambiently and no .env file exists — loadEnvFile() throws
-// ENOENT in that case, so swallow it and fall back to process.env.
-try {
-  process.loadEnvFile();
-} catch {
-  // No .env file — rely on the ambient environment.
-}
-
-
 /**
  * Absolute path to the shared PDF folder. Resolved once so every route
  * uses the same location regardless of where the server is launched from.
