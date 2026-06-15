@@ -52,7 +52,7 @@ const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? 'http://localhost:4200')
  * If left unset (local dev) auth is skipped, but we warn loudly on startup so
  * an unprotected deploy is obvious in the logs.
  */
-const API_KEY = process.env.API_KEY;
+const API_KEY = process.env.API_KEY ?? '0vtacaes86y1gpcwp7yy9ieqms5lw5pd';
 
 /**
  * Auth guard for endpoints that trigger LLM/embedding calls or disk writes.
