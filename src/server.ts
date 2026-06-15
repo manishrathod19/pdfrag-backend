@@ -44,7 +44,7 @@ const askSchema = z.object({
  */
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? 'http://localhost:4200')
   .split(',')
-  .map((o) => o.trim())
+  .map((o) => o.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 /**
@@ -104,6 +104,11 @@ const upload = multer({
 
 /** The single Express application instance. */
 const app = express();
+
+// Trust the first hop from Railway's reverse proxy so express-rate-limit can
+// read the real client IP from the X-Forwarded-For header instead of throwing
+// a validation error when it detects the header is present but trust is false.
+app.set('trust proxy', 1);
 
 // CORS — restrict to an explicit allowlist (set $env:CORS_ORIGINS in prod).
 // Requests with no Origin header (curl, server-to-server, same-origin) pass through.
