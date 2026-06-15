@@ -15,8 +15,17 @@ import { initCollection, storeChunks } from './vectorStore';
 import { ingestFolder, extractTextFromPDF } from './ingest';
 import { chunkText } from './chunker';
 import { ask, askStream } from './llm';
+import rateLimit from 'express-rate-limit';
 import { watchPDFFolder } from './watcher';
-process.loadEnvFile()
+
+// Load .env when present (local dev). In containerized/cloud deploys the env
+// vars are injected ambiently and no .env file exists — loadEnvFile() throws
+// ENOENT in that case, so swallow it and fall back to process.env.
+try {
+  process.loadEnvFile();
+} catch {
+  // No .env file — rely on the ambient environment.
+}
 
 
 /**
@@ -39,11 +48,55 @@ const askSchema = z.object({
 });
 
 /**
+ * Allowed CORS origins, comma-separated in $env:CORS_ORIGINS
+ * (e.g. "https://app.example.com,https://admin.example.com").
+ * If unset we fall back to the Angular dev server so local dev still works.
+ */
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? 'http://localhost:4200')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+/**
+ * Shared secret for the cost-bearing endpoints. Set $env:API_KEY in production.
+ * If left unset (local dev) auth is skipped, but we warn loudly on startup so
+ * an unprotected deploy is obvious in the logs.
+ */
+const API_KEY = process.env.API_KEY;
+
+/**
+ * Auth guard for endpoints that trigger LLM/embedding calls or disk writes.
+ * Accepts the key via the `x-api-key` header OR an `apiKey` query param — the
+ * latter is required because browser EventSource (SSE) cannot set headers.
+ * When API_KEY is unset the guard is a no-op so local dev is unaffected.
+ */
+const requireApiKey = (req: Request, res: Response, next: () => void) => {
+  if (!API_KEY) return next();
+  const provided = req.header('x-api-key') ?? (req.query.apiKey as string | undefined);
+  if (provided !== API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+};
+
+/**
+ * Rate limiter for the cost-bearing endpoints — caps per-IP request volume so
+ * an unauthenticated burst cannot drain LLM spend or fill the disk.
+ */
+const apiLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: Number(process.env.RATE_LIMIT_PER_MIN) || 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
  * Multer storage configuration.
  * - destination: write straight into PDF_FOLDER so the watcher would also see it.
  * - filename: keep the original filename so the user recognizes uploads.
- *   We do NOT sanitize beyond what multer does because the source is a trusted
- *   local user via the desktop UI; the file watcher reads back what's on disk.
+ *   We strip any directory components from the client-supplied name with
+ *   path.basename so a crafted originalname like "..\\..\\evil.pdf" cannot
+ *   escape PDF_FOLDER (path traversal).
  */
 const upload = multer({
   storage: multer.diskStorage({
@@ -54,16 +107,24 @@ const upload = multer({
       }
       cb(null, PDF_FOLDER);
     },
-    filename: (_req, file, cb) => cb(null, file.originalname),
+    // Collapse to a bare filename: defeats both POSIX (/) and Windows (\) traversal.
+    filename: (_req, file, cb) => cb(null, path.basename(file.originalname.replace(/\\/g, '/'))),
   }),
 });
 
 /** The single Express application instance. */
 const app = express();
 
-// CORS — allow the Angular dev server at localhost:4200 during development.
-// In production behind the same origin this becomes a no-op.
-app.use(cors({ origin: true }));
+// CORS — restrict to an explicit allowlist (set $env:CORS_ORIGINS in prod).
+// Requests with no Origin header (curl, server-to-server, same-origin) pass through.
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      cb(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+  })
+);
 
 // express.json() — parse JSON request bodies for /api/ask.
 app.use(express.json());
@@ -73,7 +134,7 @@ app.use(express.json());
  * @description Accepts a question, runs the full RAG pipeline, returns the answer.
  * Validates the request body with zod before processing.
  */
-app.post('/api/ask', async (req: Request, res: Response) => {
+app.post('/api/ask', apiLimiter, requireApiKey, async (req: Request, res: Response) => {
   // zod safeParse so we return a clean 400 instead of a thrown stack trace.
   const parsed = askSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -100,7 +161,7 @@ app.post('/api/ask', async (req: Request, res: Response) => {
  * Note: EventSource in browsers can only send GET, so the question is
  * passed as a query-string parameter.
  */
-app.get('/api/ask/stream', async (req: Request, res: Response) => {
+app.get('/api/ask/stream', apiLimiter, requireApiKey, async (req: Request, res: Response) => {
   const question = (req.query.question as string | undefined) ?? '';
   if (!question.trim()) {
     return res.status(400).json({ error: 'question query param required' });
@@ -146,7 +207,7 @@ app.get('/api/ask/stream', async (req: Request, res: Response) => {
  * ../pdfs folder, then immediately ingests it into Qdrant so it
  * is searchable without waiting for the file watcher or manual re-ingestion.
  */
-app.post('/api/upload', upload.single('file'), async (req: Request, res: Response) => {
+app.post('/api/upload', apiLimiter, requireApiKey, upload.single('file'), async (req: Request, res: Response) => {
   // multer attaches the file to req.file when storage succeeds.
   const file = req.file;
   if (!file) {
@@ -182,7 +243,7 @@ app.post('/api/upload', upload.single('file'), async (req: Request, res: Respons
  * @description Re-ingests all PDFs in ../pdfs folder into Qdrant.
  * Useful when PDFs were added manually or earlier ingestion was incomplete.
  */
-app.post('/api/ingest', async (_req: Request, res: Response) => {
+app.post('/api/ingest', apiLimiter, requireApiKey, async (_req: Request, res: Response) => {
   try {
     const chunks = await ingestFolder(PDF_FOLDER);
     await storeChunks(chunks);
@@ -235,8 +296,12 @@ async function startServer(): Promise<void> {
 
   // 3. Only now begin accepting HTTP traffic.
   app.listen(PORT, () => {
-    console.log(`[server] Listening on http://localhost:${PORT}`);
+    console.log(`[server] Listening on port ${PORT}`);
     console.log(`[server] PDF folder: ${PDF_FOLDER}`);
+    console.log(`[server] CORS origins: ${ALLOWED_ORIGINS.join(', ')}`);
+    if (!API_KEY) {
+      console.warn('[server] WARNING: API_KEY not set — cost-bearing endpoints are UNAUTHENTICATED.');
+    }
   });
 }
 
