@@ -9,7 +9,6 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { embedText } from './embedder';
 import { TextChunk } from './chunker';
 import * as crypto from 'crypto';
-process.loadEnvFile()
 
 /**
  * Collection name in Qdrant for all PDF embeddings.
