@@ -19,7 +19,7 @@ const MODEL_NAME = process.env.OLLAMA_MODEL || 'mistral:7b-instruct-q4_0';
  * reach an Ollama instance running outside the container. Override with
  * $env:OLLAMA_HOST (e.g. "http://localhost:11434" for local dev).
  */
-const OLLAMA_HOST = process.env.OLLAMA_HOST || 'https://001a-45-250-226-215.ngrok-free.app';
+const OLLAMA_HOST = process.env.OLLAMA_HOST || ' https://47b6-45-250-226-215.ngrok-free.app';
 
 /**
  * Single Ollama client pointed at OLLAMA_HOST. The default `ollama` singleton
