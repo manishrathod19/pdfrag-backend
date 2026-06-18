@@ -42,7 +42,9 @@ const askSchema = z.object({
  * (e.g. "https://app.example.com,https://admin.example.com").
  * If unset we fall back to the Angular dev server so local dev still works.
  */
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? 'http://localhost:4200')
+const ALLOWED_ORIGINS = (
+  process.env.CORS_ORIGINS ?? 'http://localhost:4200,https://pdfragui.netlify.app'
+)
   .split(',')
   .map((o) => o.trim().replace(/\/+$/, ''))
   .filter(Boolean);
