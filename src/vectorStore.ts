@@ -28,6 +28,8 @@ const VECTOR_SIZE = 384;
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY;
 
+
+console.log(`[qdrant] Using Qdrant at ${QDRANT_URL}`);
 /**
  * Single shared Qdrant client. The REST client is stateless — one instance is fine.
  */
@@ -99,6 +101,28 @@ export async function storeChunks(chunks: TextChunk[]): Promise<void> {
   // This is exactly what we want when a user re-uploads a PDF.
   await client.upsert(COLLECTION_NAME, { points, wait: true });
   console.log(`[qdrant] Upserted ${points.length} points`);
+}
+
+/**
+ * @method deleteChunksBySource
+ * @description Removes every Qdrant point belonging to a single source PDF.
+ * Points are matched on their `source` payload field (the original filename),
+ * which is the same value written by storeChunks. Used when a document is
+ * deleted so its chunks no longer surface in search results.
+ * @param source - the source filename whose chunks should be removed
+ * @returns Promise<void>
+ */
+export async function deleteChunksBySource(source: string): Promise<void> {
+  // Delete by filter rather than by ID: we don't track how many chunks a PDF
+  // produced, so matching on the `source` payload removes them all in one call.
+  // wait: true so the response only returns once the deletion is durable.
+  await client.delete(COLLECTION_NAME, {
+    filter: {
+      must: [{ key: 'source', match: { value: source } }],
+    },
+    wait: true,
+  });
+  console.log(`[qdrant] Deleted points for source "${source}"`);
 }
 
 /**

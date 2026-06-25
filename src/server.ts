@@ -11,7 +11,7 @@ import multer from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { z } from 'zod';
-import { initCollection, storeChunks } from './vectorStore';
+import { initCollection, storeChunks, deleteChunksBySource } from './vectorStore';
 import { ingestFolder, extractTextFromPDF } from './ingest';
 import { chunkText } from './chunker';
 import { ask, askStream } from './llm';
@@ -346,6 +346,79 @@ app.get('/api/documents', (_req: Request, res: Response) => {
     .readdirSync(PDF_FOLDER)
     .filter((f) => f.toLowerCase().endsWith('.pdf'));
   return res.json({ documents });
+});
+
+/**
+ * @route   DELETE /api/documents
+ * @access  Protected — requires API key (x-api-key header)
+ * @description Deletes a single uploaded PDF: removes the file from the
+ * ../pdfs folder AND removes all of its chunks from Qdrant so it no longer
+ * appears in the document list or surfaces in search results.
+ *
+ * The target filename is supplied in the JSON body as `filename` (or, for
+ * convenience, the `filename` query parameter). It is collapsed to a bare
+ * filename with path.basename so a crafted value like "..\\..\\evil.pdf"
+ * cannot escape PDF_FOLDER (same path-traversal guard as /api/upload).
+ *
+ * @authentication
+ * Pass the API key in the `x-api-key` request header.
+ *
+ * @example <caption>curl</caption>
+ * curl -X DELETE http://localhost:3001/api/documents \
+ *   -H "Content-Type: application/json" \
+ *   -H "x-api-key: YOUR_API_KEY" \
+ *   -d '{"filename":"document.pdf"}'
+ *
+ * @example <caption>JavaScript (fetch)</caption>
+ * const res = await fetch('http://localhost:3001/api/documents', {
+ *   method: 'DELETE',
+ *   headers: {
+ *     'Content-Type': 'application/json',
+ *     'x-api-key': process.env.API_KEY,
+ *   },
+ *   body: JSON.stringify({ filename: 'document.pdf' }),
+ * });
+ * const { message } = await res.json();
+ */
+app.delete('/api/documents', async (req: Request, res: Response) => {
+  // Accept the filename from the JSON body or the query string. The body is the
+  // documented path; the query param is a fallback for clients that cannot send
+  // a DELETE body.
+  const raw =
+    (req.body?.filename as string | undefined) ??
+    (req.query.filename as string | undefined) ??
+    '';
+
+  if (!raw.trim()) {
+    return res.status(400).json({ error: 'filename is required' });
+  }
+
+  // Collapse to a bare filename: defeats both POSIX (/) and Windows (\) traversal,
+  // mirroring the multer filename guard on /api/upload.
+  const filename = path.basename(raw.replace(/\\/g, '/'));
+
+  if (!filename.toLowerCase().endsWith('.pdf')) {
+    return res.status(400).json({ error: 'Only PDF files can be deleted' });
+  }
+
+  const filePath = path.join(PDF_FOLDER, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: `Document not found: ${filename}` });
+  }
+
+  try {
+    // Remove the Qdrant chunks first. If this throws we leave the file in place
+    // so the document's state stays consistent (file present ⇒ chunks present).
+    await deleteChunksBySource(filename);
+
+    // Then remove the file from disk.
+    fs.unlinkSync(filePath);
+
+    return res.json({ message: `Deleted ${filename}` });
+  } catch (err) {
+    console.error('[DELETE /api/documents] error:', err);
+    return res.status(500).json({ error: 'Failed to delete document' });
+  }
 });
 
 /**
